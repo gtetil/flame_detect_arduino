@@ -13,9 +13,9 @@ byte di_6_pin = 8;
 byte di_7_pin = 9;
 
 //card address pins
-byte address_bit_0_pin = 2;
-byte address_bit_1_pin = 3;
-byte address_bit_2_pin = 4;
+byte address_bit_0_pin = 3;
+byte address_bit_1_pin = 4;
+byte address_bit_2_pin = 5;
 
 //digital input states
 byte di_0_state = 0; //analog input
@@ -50,7 +50,7 @@ void setup() {
   pinMode(address_bit_1_pin, INPUT);
   pinMode(address_bit_2_pin, INPUT);
 
-  analogWrite(5, 25); //this starts a 10% duty cycle output on digital pin 5
+  analogWrite(6, 25); //this starts a 10% duty cycle output on digital pin 6
 
   //create card address
   address_bit_0_state = digitalRead(address_bit_0_pin);
@@ -68,6 +68,8 @@ void loop() {
     main_timer = millis();
     digitalInputs();
     CAN.sendMsgBuf(card_address, 0, 8, message);  //id, standard frame, data len, data buf
+    //Serial.println(card_address);
+    //Serial.println(message[0]);
   }
   
 }  
@@ -97,7 +99,7 @@ void digitalInputs() {
 int readAnalogDI(byte pin) {
   int aiValue = analogRead(pin);
   int aiState = 0;
-  if (aiValue < ai_threshold) {
+  if (aiValue > ai_threshold) {
     aiState = 1;
   }
   return aiState;
