@@ -2,6 +2,9 @@
 #include <mcp_can.h>
 #include <SPI.h>
 
+//CAN variables
+MCP_CAN CAN0(10); // Set CS to pin 10
+
 //digital input pins
 byte di_0_pin = 0; //analog input
 byte di_1_pin = 1; //analog input
@@ -11,6 +14,8 @@ byte di_4_pin = 4; //analog input
 byte di_5_pin = 5; //analog input
 byte di_6_pin = 6; //analog input
 byte di_7_pin = 7; //analog input
+byte di_pins[8] = {di_0_pin, di_1_pin, di_2_pin, di_3_pin, di_4_pin, di_5_pin, di_6_pin, di_7_pin};
+byte debug_trigger_pin = 1;  //this is also the serial Tx pin
 
 //card address pins
 byte address_bit_0_pin = 3;
@@ -37,12 +42,19 @@ int ai_threshold = 512;
 byte card_address = 0;
 unsigned long main_timer = millis();
 byte data = 0;
+byte prev_data = 0;
 byte message[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+byte ai_data_lo[8];
+byte ai_data_hi[8];
 
 void setup() {
   
+  //CAN setup
+  CAN0.begin(MCP_STDEXT, CAN_500KBPS, MCP_16MHZ);
+  pinMode(2, INPUT); // Setting pin 2 for /INT input
+  CAN0.setMode(MCP_NORMAL); // Change to normal mode to allow messages to be transmitted
+
   //Serial.begin(115200);
-  CAN.begin(CAN_500KBPS);  
   
   pinMode(di_6_pin, INPUT);
   pinMode(di_7_pin, INPUT);
@@ -59,6 +71,9 @@ void setup() {
   bitWrite(card_address, 0, address_bit_0_state);
   bitWrite(card_address, 1, address_bit_1_state);
   bitWrite(card_address, 2, address_bit_2_state);
+
+  //to trigger analog debug via CAN
+  pinMode(debug_trigger_pin, INPUT_PULLUP);
   
 }
 
@@ -67,41 +82,42 @@ void loop() {
   if ((millis() - main_timer) >= 200) {
     main_timer = millis();
     digitalInputs();
-    CAN.sendMsgBuf(card_address, 0, 8, message);  //id, standard frame, data len, data buf
     //Serial.println(card_address);
-    //Serial.println(message[0]);
+    //Serial.println(message[0]);   
   }
   
 }  
 
 void digitalInputs() {
-  di_0_state = readAnalogDI(di_0_pin);
-  di_1_state = readAnalogDI(di_1_pin);
-  di_2_state = readAnalogDI(di_2_pin);
-  di_3_state = readAnalogDI(di_3_pin);
-  di_4_state = readAnalogDI(di_4_pin);
-  di_5_state = readAnalogDI(di_5_pin);
-  di_6_state = readAnalogDI(di_6_pin);
-  di_7_state = readAnalogDI(di_7_pin);
 
-  bitWrite(data, 0, di_0_state);
-  bitWrite(data, 1, di_1_state);
-  bitWrite(data, 2, di_2_state);
-  bitWrite(data, 3, di_3_state);
-  bitWrite(data, 4, di_4_state);
-  bitWrite(data, 5, di_5_state);
-  bitWrite(data, 6, di_6_state);
-  bitWrite(data, 7, di_7_state);
+  for (int i=0; i < 8; i++){
+    readAnalogDI(di_pins[i], i);
+  }
 
-  message[0] = data;
+  if (data != prev_data) {
+    message[0] = data;
+    CAN0.sendMsgBuf(card_address, 0, 8, message);  //id, standard frame, data len, data buf
+    prev_data = data;
+  }
+
+  //pull serial Tx pin low for debug
+  if (digitalRead(debug_trigger_pin) == 0) {  
+    CAN0.sendMsgBuf(card_address + 100, 0, 8, ai_data_lo);
+    CAN0.sendMsgBuf(card_address + 200, 0, 8, ai_data_hi);
+  }
 }
 
-int readAnalogDI(byte pin) {
+int readAnalogDI(byte pin, int index) {
   int aiValue = analogRead(pin);
   int aiState = 0;
   if (aiValue > ai_threshold) {
     aiState = 1;
   }
-  return aiState;
+  bitWrite(data, index, aiState);  //digital data
+
+  //for debug, via CAN
+  ai_data_lo[index] = lowByte(aiValue);
+  ai_data_hi[index] = highByte(aiValue);
+  
 }
 
