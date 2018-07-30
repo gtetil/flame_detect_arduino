@@ -44,8 +44,8 @@ unsigned long main_timer = millis();
 byte data = 0;
 byte prev_data = 0;
 byte message[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-byte ai_data_lo[8];
-byte ai_data_hi[8];
+byte ai_data_0_3[8];
+byte ai_data_4_7[8];
 
 void setup() {
   
@@ -94,16 +94,13 @@ void digitalInputs() {
     readAnalogDI(di_pins[i], i);
   }
 
-  if (data != prev_data) {
-    message[0] = data;
-    CAN0.sendMsgBuf(card_address, 0, 8, message);  //id, standard frame, data len, data buf
-    prev_data = data;
-  }
+  message[0] = data;
+  CAN0.sendMsgBuf(card_address, 0, 8, message);  //id, standard frame, data len, data buf
 
   //pull serial Tx pin low for debug
   if (digitalRead(debug_trigger_pin) == 0) {  
-    CAN0.sendMsgBuf(card_address + 100, 0, 8, ai_data_lo);
-    CAN0.sendMsgBuf(card_address + 200, 0, 8, ai_data_hi);
+    CAN0.sendMsgBuf(card_address + 100, 0, 8, ai_data_0_3);
+    CAN0.sendMsgBuf(card_address + 200, 0, 8, ai_data_4_7);
   }
 }
 
@@ -116,8 +113,14 @@ int readAnalogDI(byte pin, int index) {
   bitWrite(data, index, aiState);  //digital data
 
   //for debug, via CAN
-  ai_data_lo[index] = lowByte(aiValue);
-  ai_data_hi[index] = highByte(aiValue);
+  if (index < 4) {
+    ai_data_0_3[index * 2] = lowByte(aiValue);
+    ai_data_0_3[(index * 2) + 1] = highByte(aiValue);
+  }
+  else {
+    ai_data_4_7[(index - 4) * 2] = lowByte(aiValue);
+    ai_data_4_7[((index - 4) * 2) + 1] = highByte(aiValue);
+  }
   
 }
 
